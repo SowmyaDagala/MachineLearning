@@ -1,0 +1,127 @@
+---
+title: "Classification on Breast Cancer"
+author: "Sowmya Dyagala"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(rpart)
+library(caret)
+library(randomForest)
+library(mlbench)
+library(VIM)
+library(mice)
+library(e1071)
+```
+
+#### Descriptive Analysis.
+
+```{r}
+
+data("BreastCancer")
+bc <- BreastCancer
+
+dim(bc)
+
+summary(bc)
+
+str(bc)
+
+head(bc)
+tail(bc)
+
+table(is.na(bc))
+
+```
+
+
+#### Vizualing and imputating the NA's values
+
+```{r}
+imput_plot<-aggr(bc,col=c('yellow','red'),
+                      numbers=TRUE,sortVars=TRUE,
+                      labels=names(bc),gap=3,
+                      ylab=c("Missing Data","Pattern"))
+
+temp <- mice(bc,m=5,maxit=20,meth='cart',seed =100)
+
+completedata <- complete(temp,4)
+
+imput_plot1 <- aggr(completedata,col=c('yellow','blue'),
+                        numbers = T, sortVars = T,
+                        labels = names(completedata), gap = 1,
+                        ylab = c("Missing data","Pattern"),plot = T)
+
+```
+
+#### Spliting the data into train and test.
+
+```{r}
+completedata <- completedata[,-1]
+
+set.seed(500)
+train <- completedata[sample(seq(1:nrow(completedata)),0.8*nrow(completedata)),]
+test <- completedata[sample(seq(1:nrow(completedata)),0.2*nrow(completedata)),]
+
+```
+
+### Decision Tree algorithm using rpart package.
+
+```{r}
+model_rp <- rpart(Class~. , data = train, method = "class")
+
+## applying the model on the test data.
+
+pred2 <- predict(model_rp, test[,-10], type = "class")
+
+#Validating the accuracy of the model.
+
+confusionMatrix(pred2, test$Class)
+
+```
+
+
+### Navie Bayes Algorithm
+```{r}
+model1 <- naiveBayes(Class~. , data = train)
+
+# predicting the test values with the model created.
+
+pred1 <- predict(model1, test[,-10])
+
+#validating the model.
+
+confusionMatrix(pred1,test$Class)
+
+
+```
+
+
+### Random Forest Algorithm.
+
+```{r}
+model_rf <- randomForest(Class~., data = train , mtry = sqrt(ncol(train)), ntree = 500)
+
+# predicting the test values with the model created.
+
+predict3 <- predict(model_rf, test[,-10])
+
+#validating the model 
+
+confusionMatrix(predict3, test$Class)
+```
+
+
+### Using Logistic Regression.
+
+```{r}
+model_log <- glm(Class~. , data = train, family = "binomial")
+
+#predicting the test values
+
+pred_log <- round(predict(model_log, test[,-10], type ="response"))
+
+```
+
