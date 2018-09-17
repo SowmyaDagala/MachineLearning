@@ -1,0 +1,233 @@
+---
+title: "Credit Default"
+author: "Sowmya Dyagala"
+date: "31 May 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(caTools)
+library(plotly)
+library(BBmisc)
+library(rpart)
+library(adabag)
+
+```
+
+```{r}
+credit <- read.csv("E:\\ML\\LMS exercises\\Credit default\\credit-default.csv")
+
+#Descriptive Analaysis.
+
+dim(credit)
+
+colnames(credit)
+head(credit)
+tail(credit)
+
+summary(credit)
+
+str(credit)
+
+```
+
+#### Data Exploring:
+
+```{r}
+table(credit$checking_balance)
+table(credit$purpose)
+table(credit$default)
+table(credit$amount)
+  
+```
+
+
+####Vizualizing the data to find the default status.
+
+```{r}
+plot_ly(credit, y = ~age, color = ~default, type = 'box')
+
+```
+
+####Data transforming.
+
+```{r}
+
+credit$existing_credits <- as.factor(credit$existing_credits)
+credit$residence_history <- as.factor(credit$residence_history)
+credit$installment_rate <- as.factor(credit$installment_rate)
+credit$default <- as.factor(credit$default)
+credit$dependents <- as.factor(credit$dependents)
+
+which(sapply(credit,is.numeric))
+
+```
+
+
+####Splitting the data.
+
+```{r}
+set.seed(123)
+cr_train <- credit[sample(seq(1:nrow(credit)),0.8*nrow(credit)),]
+cr_test <- credit[sample(seq(1:nrow(credit)),0.2*nrow(credit)),]
+
+```
+
+
+#### Model Training
+
+#### Using Decision Trees algorithm (by rpart package)
+
+```{r}
+
+model_rp <- rpart(default~. , data = cr_train, method = "class")
+plot(model_rp);text(model_rp, xpd = T)
+
+result1 <- predict(model_rp, newdata = cr_test[,-17], type = "class")
+
+
+#validating the model.
+
+cf1 <- confusionMatrix(result1, cr_test$default)
+
+
+dt <- data.frame(Accuracy = cf1$overall[1], Sensitivity = cf1$byClass[1])
+rownames(dt) <- "Decision Tree"
+
+```
+
+#### Using Random Forest alogrithm.
+
+```{r}
+
+model_rf <- randomForest(default~. , data= cr_train, 
+                         mtry = round(sqrt(length(colnames(cr_train))-1)), ntree =500)
+
+
+result2 <- predict(model_rf, newdata = cr_test[,-17])
+
+#valildating the model
+
+cf2 <- confusionMatrix(result2, cr_test$default)
+
+rf <- data.frame(Accuracy = cf2$overall[1], Sensitivity = cf2$byClass[1])
+rownames(rf) <- "Random Forest"
+
+```
+
+
+####Using boosting method by Adaboost 
+
+```{r}
+
+model_ada <- adabag::boosting(default~., data = cr_train, boos = T)
+
+summary(model_ada)
+
+result_temp <- predict(model_ada, cr_test[,-17])
+
+result3 <- result_temp$class
+result3 <- as.factor(result3)
+
+#validating the model
+
+cf3 <- confusionMatrix(result3, cr_test$default)
+
+ab <- data.frame(Accuracy = cf3$overall[1], Sensitivity = cf3$byClass[1])
+rownames(ab) <- "Boosting"
+```
+
+####Using KNN algorithm to build the model.
+
+```{r}
+
+#converting the categorical columns to numerical columns
+
+credit1 <- read.csv("E:\\ML\\LMS exercises\\Credit default\\credit-default.csv")
+
+#data transformation.
+
+credit1$dependents <- as.factor(credit1$dependents)
+credit1$existing_credits <- as.factor(credit1$existing_credits)
+credit1$residence_history <- as.factor(credit1$residence_history)
+credit1$installment_rate <- as.factor(credit1$installment_rate)
+
+#sapply(credit, class)
+
+#names(dplyr::select_if(credit,is.numeric))
+
+which(sapply(credit1,is.numeric))
+
+dummy_obj <- dummyVars(~., data=credit1)
+
+credit_new <- data.frame(predict(dummy_obj, newdata = credit1))
+
+#Normalizing the data before building the KNN model.
+
+credit_norm <- normalize(credit_new, method = 'range', range = c(0,1))
+
+#Splitting the data into train and test.
+
+set.seed(123)
+
+credit_norm_train <-credit_norm[sample(seq(1,nrow(credit_norm)),0.7*nrow(credit_norm)),]
+credit_norm_test <- credit_norm[sample(seq(1,nrow(credit_norm)),0.3*nrow(credit_norm)),]
+
+#Model
+
+credit_norm_test$predict <- knn(credit_norm_train,
+                                credit_norm_test, cl = as.factor(credit_norm_train$default),
+                                k = 6)
+
+credit_norm_test$default = as.factor(credit_norm_test$default)
+credit_norm_test$predict = as.factor(credit_norm_test$predict)
+
+cf3 <- confusionMatrix(credit_norm_test$predict, credit_norm_test$default)
+
+kk <- data.frame(Accuracy = cf3$overall[1],Sensitivity = cf3$byClass[1])
+rownames(kk) <- "KNN"
+```
+
+####Using Navie Bayes Algorithm.
+
+```{r}
+# Data transformation.
+
+credit11 <- credit1
+str(credit11)
+cl <- which(sapply(credit11, is.numeric))
+credit11$default <- as.factor(credit11$default)
+credit11$months_loan_duration_bin <- as.factor(cut(credit11$months_loan_duration,6))
+credit11$amount_bin <- as.factor(cut(credit11$amount,6))
+credit11$age_bin <- as.factor(cut(credit11$age,6))
+credit11<- credit11[-cl]
+cl <- which(sapply(credit11, is.numeric))
+cl
+
+#Splitting the data to train and test
+
+credit11_train <- credit11[sample(seq(1,nrow(credit11)),0.7*nrow(credit11)),]
+credit11_test <- credit11[sample(seq(1,nrow(credit11)),0.3*nrow(credit11)),]
+
+# Building model
+
+model_nb <- naiveBayes(default~., data = credit11_train)
+predict1 <- predict(model_nb,credit11_test, type = 'raw')
+credit11_test$predict <- ifelse(predict1[,1] > 0.5,1,2)
+
+credit11_test$predict <- as.factor(credit11_test$predict)
+credit11_test$default <- as.factor(credit11_test$default)
+
+cf4 <- confusionMatrix(credit11_test$predict,credit11_test$default,positive = '1')
+nb <- data.frame(Accuracy = cf4$overall[1],Sensitivity = cf4$byClass[1])
+rownames(nb) <-"Naives"
+
+```
+
+####Overall Accuracry and Sensitivity for all the Classification Models:
+```{r}
+overall <- rbind(dt,rf,ab,kk,nb)
+```
+
