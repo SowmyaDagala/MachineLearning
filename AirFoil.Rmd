@@ -1,0 +1,68 @@
+---
+title: "AirFoil"
+author: "Sowmya Dyagala"
+date: "27 June 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(100)
+library(dplyr)
+library(caret)
+library(readxl)
+library(ggplot2)
+library(corrplot)
+
+
+```
+
+```{r}
+air <- read_xlsx("E:/Kaggle/Airfoil Noise/Book1.xlsx")
+air <- as.data.frame(air)
+dim(air)
+summary(air)
+str(air)
+```
+
+```{r}
+mis <- function(x){
+  sapply(x, function(y)sum(is.na(y))/length(y)*100)
+}
+
+mis(air)
+
+corrplot(cor(air), method = "number")
+```
+
+```{r}
+#Visualzing the data.
+
+colnames(air)
+
+air %>% group_by()
+```
+
+
+```{r}
+
+#splitting train and test.
+
+train.rows <- createDataPartition(air$`Scaled sound pressure level, in decibels`, p=0.7, list = F)
+air_train <- air[train.rows,]
+air_test <- air[-train.rows,]
+
+
+lm_model <- lm(`Scaled sound pressure level, in decibels`~., data = air_train)
+
+y_pred <- predict(lm_model, newdata = air_test %>% select(-`Scaled sound pressure level, in decibels`))
+
+rmse <- sqrt(sum((air_test$`Scaled sound pressure level, in decibels` - y_pred) ^2)/ nrow(air_test))
+
+RMSE(y_pred, air_test$`Scaled sound pressure level, in decibels`)
+
+plot(air_test$`Scaled sound pressure level, in decibels`,y_pred)
+
+
+```
+
